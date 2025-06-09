@@ -1,13 +1,16 @@
+
 import glfw
 from OpenGL.GL import *
 from PIL import Image, ImageDraw, ImageFont
 import random
+import time
+
 
 mouse_pos = (0.0, 0.0)
 score = 0
 bullets = 10
-
 ducks = []
+game_over = False
 
 def new_duck(): return {
    "x": -1.2,
@@ -42,7 +45,7 @@ def load_texture(path):
     glBindTexture(GL_TEXTURE_2D, 0)
     return tex_id, width, height
 def create_text_texture(text, font_path=None, font_size=32, color=(255,255,255,255)):
-    font = ImageFont.truetype(font_path or "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+    font = ImageFont.truetype(font_path or "./teachers/dejavu-fonts-ttf-2.37/ttf/DejaVuSans.ttf", font_size)
     dummy_img = Image.new("RGBA", (1,1))
     dummy_draw = ImageDraw.Draw(dummy_img)
     bbox = dummy_draw.textbbox((0, 0), text, font=font)
@@ -127,8 +130,17 @@ def draw_crosshair(x, y, size=0.05, gap=0.01):
     glEnd()
 
 def mouse_button_callback(window, button, action, mods):
-    global score
+    global score, bullets, game_over
     if(button == glfw.MOUSE_BUTTON_LEFT and action == glfw.PRESS):
+        if bullets <= 0:
+            print("No bullets left!")
+            return
+        bullets -= 1
+        if bullets == 0:
+            print("Out of bullets! Game Over!")
+            game_over = True
+            return
+        print(f"Bullets left: {bullets}")
         print(mouse_pos)
         for duck in ducks:
             if (duck["x"] - 0.075 <= mouse_pos[0] <= duck["x"] + 0.075 and
@@ -156,41 +168,75 @@ def get_quad_corners(center_x, center_y, desired_width, img_width, img_height):
         (center_x - half_w, center_y + half_h),  # top left
     ]
 
-def update_ducks():
-    global score
+def update_ducks(delta_time):
+    global score, game_over
+    dead_ducks = 0
+
     for duck in ducks:
-        duck["x"] += duck["speed"]
+        duck["x"] += duck["speed"]  * delta_time * 120 # Assuming 120 FPS for delta_time calculation
 
         duck["wings_flap_current_cd"] -= 1
 
         if duck["wings_flap_current_cd"] <= 0:
             duck["wings_flap_current_cd"] = duck["wings_flap_total_cd"]
             if duck["state"] == "flying_0":
-                duck["texture"] = load_texture("./sprites/black_duck/flying_1.png")[0]
+                duck["texture"] = load_texture("./teachers/fabio.jpg")[0]
                 duck["state"] = "flying_1"
             elif duck["state"] == "flying_1":
-                duck["texture"] = load_texture("./sprites/black_duck/flying_2.png")[0]
+                duck["texture"] = load_texture("./teachers/fabio.jpg")[0]
                 duck["state"] = "flying_2"
             elif duck["state"] == "flying_2":
-                duck["texture"] = load_texture("./sprites/black_duck/flying_0.png")[0]
+                duck["texture"] = load_texture("./teachers/fabio.jpg")[0]
                 duck["state"] = "flying_0"
 
         if duck["state"] == "hit":
-            duck["texture"] = load_texture("./sprites/black_duck/hit.png")[0]
+            duck["texture"] = load_texture("./teachers/fabiohit.png")[0]
             duck["speed"] = 0.0
             duck["death_animation_cd"] -= 1
         
         if duck["death_animation_cd"] <= 0:
-            duck["texture"] = load_texture("./sprites/black_duck/dead.png")[0]
+            duck["texture"] = load_texture("./teachers/fabiodead.png")[0]
             duck["state"] = "dead"
             duck["y"] -= 0.015
 
-        if duck["x"] > 1.2:
-            duck.update(new_duck())
-            score -= 200
-        
-        if duck["y"] < -1.2:
-            duck.update(new_duck())
+        if duck["state"] == "dead":
+            duck["y"] -= 0.15
+            dead_ducks += 1
+           
+
+        if duck["x"] > 1.2 and duck["state"] != "dead" and duck["state"] != "hit":
+            print("Um pato escapou! Game Over!")
+            game_over = True
+            return
+
+    # Quando todos os patos estiverem mortos: começa nova wave
+    if dead_ducks == len(ducks):
+        print("Nova wave!")
+        global bullets# Resetar balas
+        bullets = 10
+
+        for duck in ducks:
+            new = new_duck()
+            # Aumentar a velocidade proporcional ao número da wave
+            new["speed"] += 0.002  # Aumenta a velocidade base
+            new["texture"] = load_texture("./teachers/fabio.jpg")[0]
+            new["wings_flap_current_cd"] = new["wings_flap_total_cd"]
+            duck.update(new)
+
+
+def draw_bullets(bullets_left):
+    bullet_tex, w, h = load_texture("./sprites/bullet.png")
+    spacing = 0.07
+    start_x = -1 + spacing
+    y = 0.9
+    for i in range(bullets_left):
+        corners = get_quad_corners(start_x + i * spacing, y, 0.05, w, h)
+        draw_with_texture(*corners, texture=bullet_tex)
+
+def draw_game_over():
+    tex_id, w, h = create_text_texture("GAME OVER!", font_size=64, color=(255, 0, 0, 255))
+    corners = get_quad_corners(0, 0, 0.6, w, h)
+    draw_text_texture(*corners, tex_id)
 
 def main():
     glfw.init()
@@ -204,39 +250,64 @@ def main():
 
     draw_background()
 
+    global game_over  # importante referenciar global aqui
+
     grass_texture, _, _ = load_texture("./sprites/spr_floor.png")
     bush_texture, bush_w, bush_h = load_texture("./sprites/spr_bush.png")
     tree_texture, tree_w, tree_h = load_texture("./sprites/spr_tree.png")
-    duck_texture, duck_w, duck_h = load_texture("./sprites/black_duck/flying_0.png")
+    duck_texture, duck_w, duck_h = load_texture("./teachers/fabio.jpg")
     
     for _ in range(5):
         duck = new_duck()
         duck["texture"] = duck_texture
         duck["wings_flap_current_cd"] = duck["wings_flap_total_cd"]        
         ducks.append(duck)
-        draw_with_texture(*get_quad_corners(duck["x"], duck["y"], 0.15, duck_w, duck_h), duck["texture"])
 
-    while glfw.window_should_close(window) == False:
+    last_time = time.time()
+    game_over_display_time = 0  # para controlar quanto tempo mostrar o game over
+
+    while not glfw.window_should_close(window):
         glClear(GL_COLOR_BUFFER_BIT)
-        update_ducks()
+        current_time = time.time()
+        delta_time = current_time - last_time
+        last_time = current_time
 
-        draw_with_texture(*get_quad_corners(-0.5, -0.45, 0.5, tree_w, tree_h), tree_texture)
-        draw_with_texture(*get_quad_corners(0.6, -0.76, 0.2, bush_w, bush_h), bush_texture)
-        draw_with_texture((-1, -1), (1, -1), (1, -0.75), (-1, -0.75), grass_texture)
-        
-        score_tex, score_w, score_h = create_text_texture(f"Score: {score}")
-        draw_text_texture(*get_quad_corners(0, 0.9, 0.3, score_w, score_h), score_tex)
+        if not game_over:
+            update_ducks(delta_time)
 
-        for duck in ducks:
-            draw_with_texture(*get_quad_corners(duck["x"], duck["y"], 0.15, duck_w, duck_h), duck["texture"])     
-        
-        draw_crosshair(*mouse_pos)
+            # desenhar cenário e elementos
+            draw_with_texture(*get_quad_corners(-0.5, -0.45, 0.5, tree_w, tree_h), tree_texture)
+            draw_with_texture(*get_quad_corners(0.6, -0.76, 0.2, bush_w, bush_h), bush_texture)
+            draw_with_texture((-1, -1), (1, -1), (1, -0.75), (-1, -0.75), grass_texture)
+            
+            # desenhar score
+            score_tex, score_w, score_h = create_text_texture(f"Score: {score}")
+            draw_text_texture(*get_quad_corners(0, 0.9, 0.3, score_w, score_h), score_tex)
+
+            # desenhar patos
+            for duck in ducks:
+                draw_with_texture(*get_quad_corners(duck["x"], duck["y"], 0.15, duck_w, duck_h), duck["texture"])     
+            
+            # desenhar balas
+            draw_bullets(bullets)
+
+            # desenhar mira
+            draw_crosshair(*mouse_pos)
+
+        else:
+            # game over: desenha o texto GAME OVER
+            draw_game_over()
+            game_over_display_time += delta_time
+
+            # após 3 segundos, fecha a janela
+            if game_over_display_time > 3:
+                glfw.set_window_should_close(window, True)
 
         glfw.swap_buffers(window)
         glfw.poll_events()
-   
+
     glfw.terminate()
+
 
 if(__name__ == "__main__"):
     main()
-
