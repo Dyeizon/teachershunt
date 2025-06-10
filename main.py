@@ -4,8 +4,7 @@ from OpenGL.GL import *
 from PIL import Image, ImageDraw, ImageFont
 import random
 import time
-
-
+import winsound
 mouse_pos = (0.0, 0.0)
 score = 0
 bullets = 10
@@ -15,7 +14,7 @@ game_over = False
 def new_duck(): return {
    "x": -1.2,
    "y": random.uniform(-0.7, 0.95),
-   "speed": random.uniform(0.005, 0.009),
+   "speed": random.uniform(0.002, 0.003),
    "wings_flap_total_cd": random.uniform(15, 30),
    "wings_flap_current_cd": 0,
    "texture": None,
@@ -44,6 +43,7 @@ def load_texture(path):
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
     glBindTexture(GL_TEXTURE_2D, 0)
     return tex_id, width, height
+
 def create_text_texture(text, font_path=None, font_size=32, color=(255,255,255,255)):
     font = ImageFont.truetype(font_path or "./teachers/dejavu-fonts-ttf-2.37/ttf/DejaVuSans.ttf", font_size)
     dummy_img = Image.new("RGBA", (1,1))
@@ -107,9 +107,6 @@ def draw_text_texture(bottom_left, bottom_right, top_right, top_left, tex_id):
     glBindTexture(GL_TEXTURE_2D, 0)
     glDisable(GL_TEXTURE_2D)
 
-def teclado(window, key, scancode, action, mods):
-    pass
-
 def draw_crosshair(x, y, size=0.05, gap=0.01):
     glColor3f(1, 1, 1)
     glLineWidth(2)
@@ -132,12 +129,13 @@ def draw_crosshair(x, y, size=0.05, gap=0.01):
 def mouse_button_callback(window, button, action, mods):
     global score, bullets, game_over
     if(button == glfw.MOUSE_BUTTON_LEFT and action == glfw.PRESS):
+        winsound.PlaySound("shot.wav", winsound.SND_FILENAME | winsound.SND_ASYNC)
         if bullets <= 0:
-            print("No bullets left!")
+            print("Acabaram as balas!")
             return
         bullets -= 1
         if bullets == 0:
-            print("Out of bullets! Game Over!")
+            print("Sem balas! Game Over!")
             game_over = True
             return
         print(f"Bullets left: {bullets}")
@@ -160,7 +158,6 @@ def get_quad_corners(center_x, center_y, desired_width, img_width, img_height):
     half_w = desired_width / 2
     half_h = (desired_width * aspect) / 2
 
-    # (left, bottom), (right, bottom), (right, top), (left, top)
     return [
         (center_x - half_w, center_y - half_h),  # bottom left
         (center_x + half_w, center_y - half_h),  # bottom right
@@ -173,7 +170,7 @@ def update_ducks(delta_time):
     dead_ducks = 0
 
     for duck in ducks:
-        duck["x"] += duck["speed"]  * delta_time * 120 # Assuming 120 FPS for delta_time calculation
+        duck["x"] += duck["speed"]  * delta_time * 120
 
         duck["wings_flap_current_cd"] -= 1
 
@@ -200,7 +197,7 @@ def update_ducks(delta_time):
             duck["y"] -= 0.015
 
         if duck["state"] == "dead":
-            duck["y"] -= 0.15
+            duck["y"] -= 0.015
             dead_ducks += 1
            
 
@@ -212,7 +209,7 @@ def update_ducks(delta_time):
     # Quando todos os patos estiverem mortos: começa nova wave
     if dead_ducks == len(ducks):
         print("Nova wave!")
-        global bullets# Resetar balas
+        global bullets
         bullets = 10
 
         for duck in ducks:
@@ -234,7 +231,8 @@ def draw_bullets(bullets_left):
         draw_with_texture(*corners, texture=bullet_tex)
 
 def draw_game_over():
-    tex_id, w, h = create_text_texture("GAME OVER!", font_size=64, color=(255, 0, 0, 255))
+    text = f"GAME OVER! PONTUAÇÃO: {score}"
+    tex_id, w, h = create_text_texture(text, font_size=64, color=(255, 0, 0, 255))
     corners = get_quad_corners(0, 0, 0.6, w, h)
     draw_text_texture(*corners, tex_id)
 
@@ -244,13 +242,12 @@ def main():
     glfw.make_context_current(window)
     glfw.set_input_mode(window, glfw.CURSOR, glfw.CURSOR_HIDDEN)
 
-    glfw.set_key_callback(window, teclado)
     glfw.set_mouse_button_callback(window, mouse_button_callback)
     glfw.set_cursor_pos_callback(window, cursor_pos_callback)
 
     draw_background()
 
-    global game_over  # importante referenciar global aqui
+    global game_over
 
     grass_texture, _, _ = load_texture("./sprites/spr_floor.png")
     bush_texture, bush_w, bush_h = load_texture("./sprites/spr_bush.png")
