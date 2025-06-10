@@ -5,27 +5,27 @@ from PIL import Image, ImageDraw, ImageFont
 import random
 import time
 import winsound
+
 mouse_pos = (0.0, 0.0)
 score = 0
 bullets = 10
 ducks = []
 game_over = False
+PATOS = 5
+PATOS_A_MAIS = 0
+PATOS_SPEED_A_MAIS = 0.002
 
 def new_duck(): return {
    "x": -1.2,
    "y": random.uniform(-0.7, 0.95),
-   "speed": random.uniform(0.002, 0.003),
-   "wings_flap_total_cd": random.uniform(15, 30),
-   "wings_flap_current_cd": 0,
+   "speed": random.uniform(0.001, 0.002),
    "texture": None,
    "state": "flying_0",
    "death_animation_cd": 30,
 }
 
 pallete = {
-    "background": (59/255, 187/255, 250/255, 1.0),
-    "dirt": (140/255,107/255,0/255,255/255),
-    "grass": (124/255,190/255,5/255,255/255)
+    "background": (59/255, 187/255, 250/255, 1.0)
 }
 
 def load_texture(path):
@@ -138,8 +138,6 @@ def mouse_button_callback(window, button, action, mods):
             print("Sem balas! Game Over!")
             game_over = True
             return
-        print(f"Bullets left: {bullets}")
-        print(mouse_pos)
         for duck in ducks:
             if (duck["x"] - 0.075 <= mouse_pos[0] <= duck["x"] + 0.075 and
                 duck["y"] - 0.075 <= mouse_pos[1] <= duck["y"] + 0.075 and duck["state"] != "dead" and duck["state"] != "hit"):
@@ -153,6 +151,17 @@ def cursor_pos_callback(window, xpos, ypos):
 
     mouse_pos = ((xpos / width) * 2 - 1, -((ypos / height) * 2 - 1))
 
+def load_all_textures():
+    textures = {}
+    textures["duck"] = load_texture("./teachers/fabio.jpg")
+    textures["hit_duck"] = load_texture("./teachers/fabiohit.png")
+    textures["dead_duck"] = load_texture("./teachers/fabiodead.png")
+    textures["grass"] = load_texture("./sprites/spr_floor.png")
+    textures["bush"] = load_texture("./sprites/spr_bush.png")
+    textures["tree"] = load_texture("./sprites/spr_tree.png")
+    textures["bullet"] = load_texture("./sprites/bullet.png")
+    return textures
+
 def get_quad_corners(center_x, center_y, desired_width, img_width, img_height):
     aspect = img_height / img_width
     half_w = desired_width / 2
@@ -165,39 +174,25 @@ def get_quad_corners(center_x, center_y, desired_width, img_width, img_height):
         (center_x - half_w, center_y + half_h),  # top left
     ]
 
-def update_ducks(delta_time):
+def update_ducks(delta_time, textures):
     global score, game_over
     dead_ducks = 0
 
     for duck in ducks:
         duck["x"] += duck["speed"]  * delta_time * 120
 
-        duck["wings_flap_current_cd"] -= 1
-
-        if duck["wings_flap_current_cd"] <= 0:
-            duck["wings_flap_current_cd"] = duck["wings_flap_total_cd"]
-            if duck["state"] == "flying_0":
-                duck["texture"] = load_texture("./teachers/fabio.jpg")[0]
-                duck["state"] = "flying_1"
-            elif duck["state"] == "flying_1":
-                duck["texture"] = load_texture("./teachers/fabio.jpg")[0]
-                duck["state"] = "flying_2"
-            elif duck["state"] == "flying_2":
-                duck["texture"] = load_texture("./teachers/fabio.jpg")[0]
-                duck["state"] = "flying_0"
-
         if duck["state"] == "hit":
-            duck["texture"] = load_texture("./teachers/fabiohit.png")[0]
+            duck["texture"] = textures["hit_duck"][0]
             duck["speed"] = 0.0
             duck["death_animation_cd"] -= 1
         
         if duck["death_animation_cd"] <= 0:
-            duck["texture"] = load_texture("./teachers/fabiodead.png")[0]
+            duck["texture"] = textures["dead_duck"][0]
             duck["state"] = "dead"
-            duck["y"] -= 0.015
+            duck["y"] -= 0.0015
 
         if duck["state"] == "dead":
-            duck["y"] -= 0.015
+            duck["y"] -= 0.0015
             dead_ducks += 1
            
 
@@ -208,21 +203,35 @@ def update_ducks(delta_time):
 
     # Quando todos os patos estiverem mortos: começa nova wave
     if dead_ducks == len(ducks):
-        print("Nova wave!")
         global bullets
         bullets = 10
+        global PATOS, PATOS_A_MAIS, PATOS_SPEED_A_MAIS
+        PATOS_A_MAIS += 1
+        PATOS_SPEED_A_MAIS += 0.0004
 
-        for duck in ducks:
+        if(PATOS_A_MAIS >= 4): PATOS_A_MAIS = 4
+
+        for i in range(0, (PATOS + PATOS_A_MAIS)):
             new = new_duck()
             # Aumentar a velocidade proporcional ao número da wave
-            new["speed"] += 0.002  # Aumenta a velocidade base
-            new["texture"] = load_texture("./teachers/fabio.jpg")[0]
-            new["wings_flap_current_cd"] = new["wings_flap_total_cd"]
-            duck.update(new)
+            new["speed"] += PATOS_SPEED_A_MAIS  # Aumenta a velocidade base
+            new["texture"] = textures["duck"][0]
+            ducks.append(new)
+
+def load_all_textures():
+    textures = {}
+    textures["duck"] = load_texture("./teachers/fabio.jpg")
+    textures["hit_duck"] = load_texture("./teachers/fabiohit.png")
+    textures["dead_duck"] = load_texture("./teachers/fabiodead.png")
+    textures["grass"] = load_texture("./sprites/spr_floor.png")
+    textures["bush"] = load_texture("./sprites/spr_bush.png")
+    textures["tree"] = load_texture("./sprites/spr_tree.png")
+    textures["bullet"] = load_texture("./sprites/bullet_2.png")
+    return textures
 
 
-def draw_bullets(bullets_left):
-    bullet_tex, w, h = load_texture("./sprites/bullet.png")
+def draw_bullets(bullets_left, textures):
+    bullet_tex, w, h = textures["bullet"]
     spacing = 0.07
     start_x = -1 + spacing
     y = 0.9
@@ -231,7 +240,7 @@ def draw_bullets(bullets_left):
         draw_with_texture(*corners, texture=bullet_tex)
 
 def draw_game_over():
-    text = f"GAME OVER! PONTUAÇÃO: {score}"
+    text = f"IT'S OVER!\nPONTOS: {score}"
     tex_id, w, h = create_text_texture(text, font_size=64, color=(255, 0, 0, 255))
     corners = get_quad_corners(0, 0, 0.6, w, h)
     draw_text_texture(*corners, tex_id)
@@ -246,18 +255,18 @@ def main():
     glfw.set_cursor_pos_callback(window, cursor_pos_callback)
 
     draw_background()
+    textures = load_all_textures()
 
     global game_over
 
-    grass_texture, _, _ = load_texture("./sprites/spr_floor.png")
-    bush_texture, bush_w, bush_h = load_texture("./sprites/spr_bush.png")
-    tree_texture, tree_w, tree_h = load_texture("./sprites/spr_tree.png")
-    duck_texture, duck_w, duck_h = load_texture("./teachers/fabio.jpg")
+    grass_texture, _, _ = textures["grass"]
+    bush_texture, bush_w, bush_h = textures["bush"]
+    tree_texture, tree_w, tree_h = textures["tree"]
+    duck_texture, duck_w, duck_h = textures["duck"]
     
-    for _ in range(5):
+    for _ in range(PATOS):
         duck = new_duck()
-        duck["texture"] = duck_texture
-        duck["wings_flap_current_cd"] = duck["wings_flap_total_cd"]        
+        duck["texture"] = duck_texture    
         ducks.append(duck)
 
     last_time = time.time()
@@ -270,7 +279,7 @@ def main():
         last_time = current_time
 
         if not game_over:
-            update_ducks(delta_time)
+            update_ducks(delta_time, textures)
 
             # desenhar cenário e elementos
             draw_with_texture(*get_quad_corners(-0.5, -0.45, 0.5, tree_w, tree_h), tree_texture)
@@ -286,7 +295,7 @@ def main():
                 draw_with_texture(*get_quad_corners(duck["x"], duck["y"], 0.15, duck_w, duck_h), duck["texture"])     
             
             # desenhar balas
-            draw_bullets(bullets)
+            draw_bullets(bullets, textures)
 
             # desenhar mira
             draw_crosshair(*mouse_pos)
@@ -304,7 +313,6 @@ def main():
         glfw.poll_events()
 
     glfw.terminate()
-
 
 if(__name__ == "__main__"):
     main()
